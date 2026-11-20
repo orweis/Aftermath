@@ -15,11 +15,9 @@ import time
 
 __version__ = "2.0.0"
 
-__all__ = ["Aftermath", "__version__"]
-
 _UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9_.-]")
 
-QUICK_LOADER = '''\
+QUICK_LOADER = """\
 # Aftermath quick loader.
 # WARNING: this unpickles the dump next to this file. Unpickling can execute
 # arbitrary code. Only run this if you created the dump on a machine you trust.
@@ -31,7 +29,7 @@ sys.path.extend(%(extra_paths)s)
 
 with open(os.path.splitext(__file__)[0], "rb") as src:
     data = pickle.load(src)
-'''
+"""
 
 
 def _open_private(path):
@@ -43,7 +41,7 @@ def _open_private(path):
 
 def _sanitize_name(name):
     """Reduce `name` to a safe single path component."""
-    name = _UNSAFE_NAME_CHARS.sub("_", str(name)).lstrip(".")
+    name = _UNSAFE_NAME_CHARS.sub("_", str(name)).lstrip(".")[:100]
     return name or "aftermath"
 
 
@@ -95,11 +93,13 @@ class Aftermath:
         return stack
 
     @staticmethod
-    def create_quick_loader(dump_file_path, extend_sys_path=False):
+    def create_quick_loader(dump_file_path, extend_sys_path=True):
         """Write `<dump>.py`, a script that loads the dump into `data`.
 
-        The crashing process's sys.path is only embedded when `extend_sys_path`
-        is true, since it would let the loader import from those directories.
+        By default (as in 1.x) the crashing process's sys.path is embedded so
+        pickled classes can be imported when loading. Pass `extend_sys_path=False`
+        to omit it; the loader then needs the crashing program's modules on
+        PYTHONPATH. Either way, only load dumps you created.
         """
         paths = [str(p) for p in sys.path] if extend_sys_path else []
         source = QUICK_LOADER % {"extra_paths": repr(paths)}
@@ -107,7 +107,7 @@ class Aftermath:
             q.write(source.encode("utf-8"))
 
     @staticmethod
-    def save_stack_to_file(tb, dir_path, name=None, extend_sys_path=False):
+    def save_stack_to_file(tb, dir_path, name=None, extend_sys_path=True):
         """Dump the stack of `tb` under `dir_path` (created 0700, files 0600)."""
         stack = Aftermath.extract_stack(tb)
         if name is None:
@@ -117,19 +117,28 @@ class Aftermath:
         base = os.path.join(dir_path, name + time.strftime("_%Y_%m_%d_%H_%M_%S") + "_aftermath")
         path, counter = base, 0
         while True:
+            # Reserve the dump and its loader together; bump on any collision.
             try:
                 dest = _open_private(path)
-                break
             except FileExistsError:
                 counter += 1
                 path = f"{base}_{counter}"
+                continue
+            try:
+                Aftermath.create_quick_loader(path, extend_sys_path=extend_sys_path)
+            except FileExistsError:
+                dest.close()
+                os.unlink(path)
+                counter += 1
+                path = f"{base}_{counter}"
+                continue
+            break
         with dest:
             pickle.dump(stack, dest)
-        Aftermath.create_quick_loader(path, extend_sys_path=extend_sys_path)
         return stack
 
     @staticmethod
-    def guard(dir_path, extend_sys_path=False):
+    def guard(dir_path, extend_sys_path=True):
         """Decorator: on Exception, dump the stack to `dir_path` and re-raise.
 
         A failure to write the dump never replaces the original exception; it
