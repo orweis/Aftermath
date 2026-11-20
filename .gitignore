@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+# Crash dumps may contain secrets: never commit them
+debug/
+*_[0-9][0-9]_aftermath*
+*_[0-9][0-9]_aftermath*.py
