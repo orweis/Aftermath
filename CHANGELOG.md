@@ -2,6 +2,9 @@
 
 ## 2.0.0
 
+### License
+- The project is now licensed under the Apache License 2.0 (`LICENSE`).
+
 ### Breaking
 - Python 3 only (3.10+). The module no longer imports on Python 2.
 - Dump files and the quick loader are created exclusively (never overwriting or

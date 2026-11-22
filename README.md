@@ -63,4 +63,4 @@ pytest
 
 ## License
 
-No license file is currently included; contact the repository owner before reuse.
+Licensed under the [Apache License, Version 2.0](LICENSE).
